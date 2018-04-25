@@ -3,12 +3,11 @@ module_manager.review()
 import os
 import random
 import cv2
-from shutil import copyfile
 import numpy as np
-import crop_face
 
 
 #code adapted from Paul van Gent
+#data taken from CK+ database
 
 emotions = ["neutral", "anger", "contempt", "disgust", "fear", "happy",
  "sadness", "surprise"]
@@ -30,7 +29,7 @@ def getAllPhotos(path):
         allPhotos = []
         for filename in os.listdir(path):
             if filename != '.DS_Store':
-                allPhotos.extend(getAllPhotos(path + '/' + filename))
+                allPhotos += (getAllPhotos(path + '/' + filename))
         return allPhotos
 
 #resizes all photos
@@ -81,17 +80,17 @@ def getFile(path):
                 return getFile(path + '/' + filename)
 
 
-#gets result for each face
+#gets result for each face (rewrite doesn't work)
 def getResult(path):
     participantResults = {}
     for participant in os.listdir(path):
         if participant == '.DS_Store':
             continue
-        newPath = path + '/' + participant
-        for face in os.listdir(newPath):
+        for face in os.listdir(path + '/' + participant):
             if face == '.DS_Store':
                 continue
             try:
+                newPath = path + '/' + participant + '/' + face
                 partNum = participant[-3:] + face
                 files = getFile(newPath)
                 emotion = int((readFile(files).strip())[0])
@@ -133,12 +132,13 @@ def findLargestFace(facesDetected):
 def cropEmotionPhotos(emotionPhoto):
     for key in emotionPhoto:
         for photoName in emotionPhoto[key]:
-            cropFaces(photoName)
+            cropFaces(photoName)    
 
 #machine learning part
 
 fisherFace = cv2.face.FisherFaceRecognizer_create()
-
+emotions = ["neutral", "anger", "contempt", "disgust", "fear", "happy",
+ "sadness", "surprise"]
 
 def separateFiles(emotion,emotionPhoto):
     files = emotionPhoto[emotion]
@@ -152,7 +152,34 @@ def makeSets():
     partPhotos = participantPhotos('cohn-kanade-images')
     participantResults = getResult('Emotion')
     emotionPhoto = emotionPhotos(partPhotos,participantResults)
+    emotionPhoto['neutral'] = emotionPhoto['neutral'][0:150]
+    emotionPhoto['anger'] = emotionPhoto['anger']
     cropEmotionPhotos(emotionPhoto)
+    angryPhotos = getAllPhotos('angry')
+    happyPhotos = getAllPhotos('happy')
+    currentPhotos_angry = emotionPhoto['anger'] 
+    currentPhotos_angry += (angryPhotos)
+    emotionPhoto['anger'] = currentPhotos_angry
+    currentPhotos_happy = emotionPhoto['happy'] 
+    currentPhotos_happy += (happyPhotos)
+    emotionPhoto['happy'] = currentPhotos_happy
+    
+    print (len(emotionPhoto['neutral']))
+    # print ('\n\n\n')
+    print  (len(emotionPhoto['anger']))
+    # print ('\n\n\n')
+    print (len(emotionPhoto['contempt']))
+    # print ('\n\n\n')
+    # print (emotionPhoto['disgust'])
+    # print ('\n\n\n')
+    # print (emotionPhoto['fear'])
+    # print ('\n\n\n')
+    print (len(emotionPhoto['happy']))
+    # print ('\n\n\n')
+    # print (emotionPhoto['sadness'])
+    # print ('\n\n\n')
+    # print (emotionPhoto['surprise'])
+    
     
     trainingData = []
     trainingLabels = []
@@ -160,19 +187,20 @@ def makeSets():
     predictionLabels = []
     
     for emotion in emotions:
-        training, prediction = separateFiles(emotion,emotionPhoto)
-        for item in training:
-            image = cv2.imread(item)
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            trainingData.append(gray)
-            trainingLabels.append(emotions.index(emotion))
+        if emotion != 'contempt' and emotion!= 'fear' and emotion != 'disgust':
+            training, prediction = separateFiles(emotion,emotionPhoto)
+            for item in training:
+                image = cv2.imread(item)
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                trainingData.append(gray)
+                trainingLabels.append(emotions.index(emotion))
+            
+            for item in prediction:
+                image = cv2.imread(item)
+                gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+                predictionData.append(gray)
+                predictionLabels.append(emotions.index(emotion))
         
-        for item in prediction:
-            image = cv2.imread(item)
-            gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-            predictionData.append(gray)
-            predictionLabels.append(emotions.index(emotion))
-    
     return trainingData,trainingLabels, predictionData, predictionLabels
 
 def runRecogniser():
@@ -189,22 +217,25 @@ def runRecogniser():
         pred, conf = fisherFace.predict(image)
         if pred == predictionLabels[count]:
             correct += 1
-            count += 1
         else:
             incorrect += 1
-            count += 1
+        count += 1
     return ((100*correct)/(correct +incorrect))
-    
-metascore = []
-for i in range(0,10):
-    correct = runRecogniser()
-    print ('got', correct, 'percent correct!')
-    metascore.append(correct)
 
-print ('\n\nend score:', np.mean(metascore), 'percent correct')
-        
-    
-    
-        
+def trainClassifier():    
+    metascore = []
+    while True:
+        correct = runRecogniser()
+        print ('got', correct, 'percent correct!')
+        if correct >= 80:
+            fisherFace.save('fisherFaceClassifier.xml')
+            break
+
+def predictEmotion():        
+    fisherFace.read('fisherFaceClassifier.xml')
+    img = cv2.imread('photo.jpg')
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    pred, conf = fisherFace.predict(img)
+    return (emotions[pred])
     
 
