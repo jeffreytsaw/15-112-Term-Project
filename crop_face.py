@@ -25,16 +25,12 @@ def cropFaces(imageName):
         return ('No face detected, please try again')
     x,y,width,height = findLargestFace(facesDetected) #finds largest face
     #crops image based on rectangle of face
-    cv2.rectangle(img,(x,y),(x+width+50,y+height+50),(255,255,255),2)
-    croppedImage = img[y:y+height+50, x:x+width+50]
+    cv2.rectangle(img,(x,y),(x+width,y+height),(255,255,255),2)
+    croppedImage = img[y:y+height, x:x+width]
     croppedImage = cv2.resize(croppedImage,(350,350))
     #saves photo 
     name = imageName
     cv2.imwrite(name,croppedImage)
-    cv2.imshow('image',croppedImage)
-    cv2.waitKey(0)
-
-cropFaces('photo.jpg')
 
 
 
